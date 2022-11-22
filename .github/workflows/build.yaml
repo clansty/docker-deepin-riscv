@@ -11,14 +11,20 @@ env:
 jobs:
   build:
     name: Build and push
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - tag: base
+            extra-packages: ca-certificates
+          - tag: plct
+            extra-packages: ca-certificates,build-essential,quilt,vim,debhelper,pkg-config,devscripts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-        # with:
-        #   image: ghcr.io/clansty/binfmt:latest
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Login to ghcr.io
@@ -32,16 +38,23 @@ jobs:
           echo "TAGS<<EOF" >> $GITHUB_ENV
 
           DATE="$(date +'%Y%m%d')"
-          echo ghcr.io/$IMAGE_NAME:$DATE.$RUN_ID >> $GITHUB_ENV
-          echo ghcr.io/$IMAGE_NAME:latest >> $GITHUB_ENV
+          echo ghcr.io/$IMAGE_NAME:$TAG >> $GITHUB_ENV
+          echo ghcr.io/$IMAGE_NAME:$TAG-$DATE.$RUN_ID >> $GITHUB_ENV
+          echo ghcr.io/$IMAGE_NAME:$TAG-$DATE >> $GITHUB_ENV
+          if [[ "$TAG" == "base" ]]; then
+              echo ghcr.io/$IMAGE_NAME:latest >> $GITHUB_ENV
+          fi
 
           echo "EOF" >> $GITHUB_ENV
         env:
           RUN_ID: ${{ github.run_id }}
+          TAG: ${{ matrix.target.tag }}
       - name: Build and Push
         uses: docker/build-push-action@v2
         with:
           platforms: linux/riscv64
           push: true
           tags: ${{ env.TAGS }}
+          build-args: |
+            EXTRA_PACKAGES=${{ matrix.target.extra-packages }}
       - uses: gautamkrishnar/keepalive-workflow@v1
